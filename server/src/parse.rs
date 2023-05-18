@@ -236,3 +236,81 @@ pub fn simple_hover(message: String) -> Hover {
         range: None,
     }
 }
+
+// Copied and modified from circom
+// Failure if unclosed comment
+pub fn preprocess(expr: &str) -> Result<String, ()> {
+    let mut pp = String::new();
+    let mut state = 0;
+    let mut loc = 0;
+    let mut block_start = 0;
+
+    let mut it = expr.chars();
+    while let Some(c0) = it.next() {
+        loc += 1;
+        match (state, c0) {
+            (0, '/') => {
+                loc += 1;
+                match it.next() {
+                    Some('/') => {
+                        state = 1;
+                        pp.push(' ');
+                        pp.push(' ');
+                    }
+                    Some('*') => {
+                        block_start = loc;
+                        state = 2;
+                        pp.push(' ');
+                        pp.push(' ');
+                    }
+                    Some(c1) => {
+                        pp.push(c0);
+                        pp.push(c1);
+                    }
+                    None => {
+                        pp.push(c0);
+                        break;
+                    }
+                }
+            }
+            (0, _) => pp.push(c0),
+            (1, '\n') => {
+                pp.push(c0);
+                state = 0;
+            }
+            (2, '*') => {
+                loc += 1;
+                let mut next = it.next();
+                while next == Some('*') {
+                    pp.push(' ');
+                    loc += 1;
+                    next = it.next();
+                }
+                match next {
+                    Some('/') => {
+                        pp.push(' ');
+                        pp.push(' ');
+                        state = 0;
+                    }
+                    Some(c) => {
+                        pp.push(' ');
+                        for _i in 0..c.len_utf8() {
+                            pp.push(' ');
+                        }
+                    }
+                    None => {}
+                }
+            }
+            (_, c) => {
+                for _i in 0..c.len_utf8() {
+                    pp.push(' ');
+                }
+            }
+        }
+    }
+    if state == 2 {
+        Err(())
+    } else {
+        Ok(pp)
+    }
+}
