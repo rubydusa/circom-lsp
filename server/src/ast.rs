@@ -117,7 +117,7 @@ enum Contender<'a> {
 }
 
 #[derive(Clone, Copy)]
-enum StatementOrExpression<'a> {
+pub enum StatementOrExpression<'a> {
     Statement(&'a ast::Statement),
     Expression(&'a ast::Expression),
 }
@@ -630,7 +630,7 @@ fn get_next_statements_or_expression(
     statements_or_expressions
 }
 
-fn get_meta(statement_or_expression: StatementOrExpression) -> &ast::Meta {
+pub fn get_meta(statement_or_expression: StatementOrExpression) -> &ast::Meta {
     match statement_or_expression {
         StatementOrExpression::Statement(x) => match x {
             ast::Statement::IfThenElse { meta, .. } => meta,
