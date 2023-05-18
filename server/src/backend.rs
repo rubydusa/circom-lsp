@@ -9,6 +9,7 @@ use codespan_reporting::diagnostic::{LabelStyle, Severity};
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::sync::Mutex;
 
 use crate::ast;
@@ -402,4 +403,36 @@ impl LanguageServer for Backend {
                 .map(|x| x.to_goto_definition()),
         )
     }
+}
+
+// generate code to act as main
+// fails on parsing errors and unclosed comments
+fn produce_main(uri: &Url, src: &str) -> Result<String, ()> {
+    let mut errors = vec![];
+    let ast = circom_parser::lang::ParseAstParser::new()
+        .parse(0, &mut errors, &parse::preprocess(src)?)
+        .map_err(|_| ())?;
+
+    // assumption: no one will call a template/function 'X1234567890'
+    let mut result = format!(
+        "include \"{}\";template X1234567890() {{",
+        parse::uri_to_string(uri)
+    );
+    for (i, definition) in ast.definitions.into_iter().enumerate() {
+        let (name, args_len, var_type) = match definition {
+            circom_structure::ast::Definition::Template { name, args, .. } => {
+                (name, args.len(), "component")
+            }
+            circom_structure::ast::Definition::Function { name, args, .. } => {
+                (name, args.len(), "var")
+            }
+        };
+        let mut zeros = vec!["0,"; args_len].into_iter().collect::<String>();
+        zeros.pop();
+
+        write!(result, "{} a{} = {}({});", var_type, i, name, zeros).unwrap();
+    }
+    write!(result, "}} component main = X1234567890();").unwrap();
+
+    Ok(result)
 }
