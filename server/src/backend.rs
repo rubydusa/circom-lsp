@@ -1,4 +1,5 @@
 use ropey::Rope;
+use tempfile::NamedTempFile;
 use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
@@ -10,6 +11,7 @@ use codespan_reporting::diagnostic::{LabelStyle, Severity};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Write;
+use std::io::Write as OtherWrite;
 use std::sync::Mutex;
 
 use crate::ast;
@@ -25,6 +27,7 @@ enum FileLibrarySource {
 struct DocumentData {
     content: Rope,
     archive: Option<ProgramArchive>,
+    main_file_id: usize,
 }
 
 struct TextDocumentItem {
@@ -48,17 +51,26 @@ impl Backend {
     }
 
     async fn on_change(&self, params: TextDocumentItem, publish_diagnostics: bool) {
-        let path = parse::uri_to_string(&params.uri);
-        let rope = Rope::from_str(&params.text);
-
         // do not compute archive if publish_diagnostics flag is not set, this
         // is done to prevent from tons of calls to the circom compiler
         //
         // also, as of now circom's parser function doesn't seperate the file library creation
         // logic from the parseing, so it's impossible to run the parser on an intermediate buffer
         let archive = if publish_diagnostics {
+            let mut tmp = NamedTempFile::new().expect("can open temp file");
+            let path = if let Ok(main) = produce_main(&params.uri, &params.text) {
+                tmp.write_all(main.as_bytes())
+                    .expect("written main part succesfully");
+
+                tmp.path().to_path_buf()
+            } else {
+                params.uri.to_file_path().expect("params uri is valid uri")
+            };
+
             let (reports, file_library_source) = match circom_parser::run_parser(
-                path,
+                path.to_str()
+                    .expect("path comprised of valid utf-8")
+                    .to_owned(),
                 "2.1.5", // TODO: figure what this version number actually does
                 vec![],  // TODO: add linked library support
             ) {
@@ -147,9 +159,28 @@ impl Backend {
             },
         };
 
+        let main_file_id = if let Some(archive) = &archive {
+            let mut i = 0;
+            let file_library = archive.inner.get_file_library().to_storage();
+
+            let result = 'result: {
+                while let Some(simple_file) = file_library.get(i) {
+                    if parse::string_to_uri(simple_file.name()) == params.uri {
+                        break 'result i;
+                    }
+                    i += 1;
+                }
+                panic!("archive should contain uri of document");
+            };
+            result
+        } else {
+            0 // TODO: Make main_file_id optional and tied to other optional document data
+        };
+
         let document = DocumentData {
-            content: rope,
+            content: Rope::from_str(&params.text),
             archive,
+            main_file_id, // due to the way codespan_reporting works
         };
 
         document_map.borrow_mut().insert(params.uri, document);
@@ -370,8 +401,7 @@ impl LanguageServer for Backend {
             return Ok(Some(parse::simple_hover(String::from("Could not find information (are there any compilation errors?)"))))
         };
 
-        // TODO: A better way to relate between URI and file_id
-        Ok(ast::find_token(pos, &word, archive.inner.file_id_main, archive).map(|x| x.to_hover()))
+        Ok(ast::find_token(pos, &word, document_data.main_file_id, archive).map(|x| x.to_hover()))
     }
 
     async fn goto_definition(
@@ -397,9 +427,8 @@ impl LanguageServer for Backend {
             return Ok(None)
         };
 
-        // TODO: A better way to relate between URI and file_id
         Ok(
-            ast::find_token(pos, &word, archive.inner.file_id_main, archive)
+            ast::find_token(pos, &word, document_data.main_file_id, archive)
                 .map(|x| x.to_goto_definition()),
         )
     }
@@ -415,7 +444,7 @@ fn produce_main(uri: &Url, src: &str) -> Result<String, ()> {
 
     // assumption: no one will call a template/function 'X1234567890'
     let mut result = format!(
-        "include \"{}\";template X1234567890() {{",
+        "pragma circom 2.1.5;include \"{}\";template X1234567890() {{",
         parse::uri_to_string(uri)
     );
     for (i, definition) in ast.definitions.into_iter().enumerate() {
