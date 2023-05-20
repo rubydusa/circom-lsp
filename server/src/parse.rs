@@ -209,14 +209,6 @@ pub fn char_range_to_position_range(
     })
 }
 
-pub fn uri_to_string(uri: &Url) -> String {
-    uri.to_file_path()
-        .expect("Invalid text document URI")
-        .into_os_string()
-        .into_string()
-        .expect("Invalid text document URI")
-}
-
 pub fn string_to_uri(s: &str) -> Url {
     // strip first and last chars because circom is stupid
     let fixed = {

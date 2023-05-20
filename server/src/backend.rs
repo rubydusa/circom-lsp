@@ -293,7 +293,15 @@ impl Backend {
     ) -> Option<Diagnostic> {
         let locations: String = other_files_diags
             .keys()
-            .map(|uri| format!("\n{}", parse::uri_to_string(uri)))
+            .map(|uri| {
+                format!(
+                    "\n{}",
+                    uri.to_file_path()
+                        .expect("uri to be valid path")
+                        .to_str()
+                        .expect("path to be comprised of valid utf-8")
+                )
+            })
             .collect();
 
         if locations.is_empty() {
@@ -458,7 +466,10 @@ fn produce_main(uri: &Url, ast: &circom_structure::ast::AST) -> String {
     // assumption: no one will call a template/function 'X1234567890'
     let mut result = format!(
         "pragma circom 2.1.5;include \"{}\";template X1234567890() {{",
-        parse::uri_to_string(uri)
+        uri.to_file_path()
+            .expect("uri to be valid path")
+            .to_str()
+            .expect("path to be comprised of valid utf-8")
     );
     for (i, definition) in ast.definitions.iter().enumerate() {
         let (name, args_len, var_type) = match definition {
