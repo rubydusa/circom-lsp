@@ -1,12 +1,11 @@
+use circom_structure::error_definition::Report;
+use circom_structure::file_definition::FileLibrary;
+use codespan_reporting::diagnostic::{LabelStyle, Severity};
 use ropey::Rope;
 use tempfile::NamedTempFile;
 use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
-
-use circom_structure::error_definition::Report;
-use circom_structure::file_definition::FileLibrary;
-use codespan_reporting::diagnostic::{LabelStyle, Severity};
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -57,14 +56,34 @@ impl Backend {
         // also, as of now circom's parser function doesn't seperate the file library creation
         // logic from the parseing, so it's impossible to run the parser on an intermediate buffer
         let archive = if publish_diagnostics {
-            let mut tmp = NamedTempFile::new().expect("can open temp file");
-            let path = if let Ok(main) = produce_main(&params.uri, &params.text) {
-                tmp.write_all(main.as_bytes())
-                    .expect("written main part succesfully");
+            let (_tmp, path) = {
+                if let Ok(ast) = parse::preprocess(&params.text)
+                    .and_then(|x| {
+                        circom_parser::lang::ParseAstParser::new()
+                            .parse(0, &mut vec![], &x)
+                            .map_err(|_| ())
+                    })
+                    .and_then(|ast| {
+                        if ast.main_component.is_none() {
+                            Ok(ast)
+                        } else {
+                            Err(())
+                        }
+                    })
+                {
+                    let mut tmp = NamedTempFile::new().expect("can open temp file");
+                    let path = tmp.path().to_path_buf();
+                    let text = produce_main(&params.uri, &ast);
+                    tmp.write_all(text.as_bytes())
+                        .expect("written main part succesfully");
 
-                tmp.path().to_path_buf()
-            } else {
-                params.uri.to_file_path().expect("params uri is valid uri")
+                    (Some(tmp), path)
+                } else {
+                    (
+                        None,
+                        params.uri.to_file_path().expect("params uri is valid uri"),
+                    )
+                }
             };
 
             let (reports, file_library_source) = match circom_parser::run_parser(
@@ -435,19 +454,13 @@ impl LanguageServer for Backend {
 }
 
 // generate code to act as main
-// fails on parsing errors and unclosed comments
-fn produce_main(uri: &Url, src: &str) -> Result<String, ()> {
-    let mut errors = vec![];
-    let ast = circom_parser::lang::ParseAstParser::new()
-        .parse(0, &mut errors, &parse::preprocess(src)?)
-        .map_err(|_| ())?;
-
+fn produce_main(uri: &Url, ast: &circom_structure::ast::AST) -> String {
     // assumption: no one will call a template/function 'X1234567890'
     let mut result = format!(
         "pragma circom 2.1.5;include \"{}\";template X1234567890() {{",
         parse::uri_to_string(uri)
     );
-    for (i, definition) in ast.definitions.into_iter().enumerate() {
+    for (i, definition) in ast.definitions.iter().enumerate() {
         let (name, args_len, var_type) = match definition {
             circom_structure::ast::Definition::Template { name, args, .. } => {
                 (name, args.len(), "component")
@@ -463,5 +476,5 @@ fn produce_main(uri: &Url, src: &str) -> Result<String, ()> {
     }
     write!(result, "}} component main = X1234567890();").unwrap();
 
-    Ok(result)
+    result
 }
