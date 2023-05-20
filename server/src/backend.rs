@@ -23,6 +23,12 @@ enum FileLibrarySource {
 }
 
 #[derive(Debug)]
+enum OnChangeError {
+    TempfileError(std::io::Error),
+    UrlError,
+}
+
+#[derive(Debug)]
 struct DocumentData {
     content: Rope,
     archive: Option<ProgramArchive>,
@@ -49,13 +55,22 @@ impl Backend {
         }
     }
 
-    async fn on_change(&self, params: TextDocumentItem, publish_diagnostics: bool) {
+    async fn on_change(
+        &self,
+        params: TextDocumentItem,
+        publish_diagnostics: bool,
+    ) -> Result<(), OnChangeError> {
         // do not compute archive if publish_diagnostics flag is not set, this
         // is done to prevent from tons of calls to the circom compiler
         //
         // also, as of now circom's parser function doesn't seperate the file library creation
         // logic from the parseing, so it's impossible to run the parser on an intermediate buffer
         let archive = if publish_diagnostics {
+            let uri_path = params
+                .uri
+                .to_file_path()
+                .map_err(|e| OnChangeError::UrlError)?;
+
             let (_tmp, path) = {
                 if let Ok(ast) = parse::preprocess(&params.text)
                     .and_then(|x| {
@@ -71,18 +86,15 @@ impl Backend {
                         }
                     })
                 {
-                    let mut tmp = NamedTempFile::new().expect("can open temp file");
+                    let mut tmp = NamedTempFile::new().map_err(OnChangeError::TempfileError)?;
                     let path = tmp.path().to_path_buf();
                     let text = produce_main(&params.uri, &ast);
                     tmp.write_all(text.as_bytes())
-                        .expect("written main part succesfully");
+                        .map_err(OnChangeError::TempfileError)?;
 
                     (Some(tmp), path)
                 } else {
-                    (
-                        None,
-                        params.uri.to_file_path().expect("params uri is valid uri"),
-                    )
+                    (None, uri_path)
                 }
             };
 
@@ -203,6 +215,7 @@ impl Backend {
         };
 
         document_map.borrow_mut().insert(params.uri, document);
+        Ok(())
     }
 
     // file_library is needed to decide in what file does the report occurs
@@ -368,7 +381,8 @@ impl LanguageServer for Backend {
             },
             true,
         )
-        .await;
+        .await
+        .expect("on change failed");
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
@@ -380,7 +394,8 @@ impl LanguageServer for Backend {
             },
             false,
         )
-        .await;
+        .await
+        .expect("on change failed");
     }
 
     async fn did_save(&self, params: DidSaveTextDocumentParams) {
@@ -404,7 +419,8 @@ impl LanguageServer for Backend {
                 },
                 true,
             )
-            .await;
+            .await
+            .expect("on change failed");
         };
     }
 
