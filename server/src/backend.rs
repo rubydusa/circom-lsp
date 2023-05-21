@@ -72,12 +72,15 @@ impl Backend {
         // also, as of now circom's parser function doesn't seperate the file library creation
         // logic from the parseing, so it's impossible to run the parser on an intermediate buffer
         let archive = if publish_diagnostics {
-            let uri_path = params
-                .uri
-                .to_file_path()
-                .map_err(|_| OnChangeError::UrlError)?;
+            let (_tmp, file_name) = {
+                let main_file_name = params
+                    .uri
+                    .to_file_path()
+                    .map_err(|_| OnChangeError::UrlError)?
+                    .to_str()
+                    .expect("pathbuf from url to be comprised of valid utf-8")
+                    .to_owned();
 
-            let (_tmp, path) = {
                 if let Ok(ast) = parse::preprocess(&params.text)
                     .and_then(|x| {
                         circom_parser::lang::ParseAstParser::new()
@@ -93,21 +96,23 @@ impl Backend {
                     })
                 {
                     let mut tmp = NamedTempFile::new().map_err(OnChangeError::TempfileError)?;
-                    let path = tmp.path().to_path_buf();
-                    let text = produce_main(&params.uri, &ast);
+                    let tmp_file_name = tmp
+                        .path()
+                        .to_str()
+                        .expect("tmpfile name to be comprised of valid utf-8")
+                        .to_owned();
+                    let text = produce_main(&main_file_name, &ast);
                     tmp.write_all(text.as_bytes())
                         .map_err(OnChangeError::TempfileError)?;
 
-                    (Some(tmp), path)
+                    (Some(tmp), tmp_file_name)
                 } else {
-                    (None, uri_path)
+                    (None, main_file_name)
                 }
             };
 
             let (reports, file_library_source) = match circom_parser::run_parser(
-                path.to_str()
-                    .expect("path comprised of valid utf-8")
-                    .to_owned(),
+                file_name,
                 "2.1.5", // TODO: figure what this version number actually does
                 vec![],  // TODO: add linked library support
             ) {
@@ -487,14 +492,11 @@ impl LanguageServer for Backend {
 }
 
 // generate code to act as main
-fn produce_main(uri: &Url, ast: &circom_structure::ast::AST) -> String {
+fn produce_main(file_name: &str, ast: &circom_structure::ast::AST) -> String {
     // assumption: no one will call a template/function 'X1234567890'
     let mut result = format!(
         "pragma circom 2.1.5;include \"{}\";template X1234567890() {{",
-        uri.to_file_path()
-            .expect("uri to be valid path")
-            .to_str()
-            .expect("path to be comprised of valid utf-8")
+        file_name
     );
     for (i, definition) in ast.definitions.iter().enumerate() {
         let (name, args_len, var_type) = match definition {
