@@ -8,6 +8,7 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
 use std::cell::RefCell;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::Write;
 use std::io::Write as OtherWrite;
@@ -69,7 +70,7 @@ impl Backend {
             let uri_path = params
                 .uri
                 .to_file_path()
-                .map_err(|e| OnChangeError::UrlError)?;
+                .map_err(|_| OnChangeError::UrlError)?;
 
             let (_tmp, path) = {
                 if let Ok(ast) = parse::preprocess(&params.text)
@@ -138,13 +139,15 @@ impl Backend {
             for (diagnostic, uri) in diagnostics {
                 if uri == params.uri {
                     main_file_diags.push(diagnostic);
-                } else if other_files_diags.contains_key(&uri) {
-                    other_files_diags
-                        .get_mut(&uri)
-                        .expect("other_files_diag should contain uri")
-                        .push(diagnostic);
                 } else {
-                    other_files_diags.insert(uri, vec![diagnostic]);
+                    match other_files_diags.entry(uri) {
+                        Entry::Occupied(mut x) => {
+                            x.get_mut().push(diagnostic);
+                        }
+                        Entry::Vacant(x) => {
+                            x.insert(vec![diagnostic]);
+                        }
+                    }
                 }
             }
 
