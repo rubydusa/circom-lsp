@@ -446,7 +446,7 @@ fn get_location(
 ) -> Option<lsp_types::Location> {
     let simple_file = archive.inner.file_library.to_storage().get(file_id)?;
 
-    let uri = parse::string_to_uri(simple_file.name());
+    let uri = parse::circom_filename_to_uri(simple_file.name());
     let source = simple_file.source();
 
     let document = Rope::from_str(source);
