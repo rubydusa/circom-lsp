@@ -32,7 +32,12 @@ enum OnChangeError {
 #[derive(Debug)]
 struct DocumentData {
     content: Rope,
-    archive: Option<ProgramArchive>,
+    optional: Option<OptionalDocumentData>,
+}
+
+#[derive(Debug)]
+struct OptionalDocumentData {
+    archive: ProgramArchive,
     main_file_id: usize,
 }
 
@@ -186,18 +191,19 @@ impl Backend {
             None => match document_map
                 .borrow_mut()
                 .remove(&params.uri)
-                .map(|x| x.archive)
+                .map(|x| x.optional.map(|y| y.archive))
             {
                 Some(existing_archive) => existing_archive,
                 None => None,
             },
         };
 
-        let main_file_id = if let Some(archive) = &archive {
+        // elaborate process is needed because the actual main is a tmp file
+        let optional = if let Some(mut archive) = archive {
             let mut i = 0;
             let file_library = archive.inner.get_file_library().to_storage();
 
-            let result = 'result: {
+            let main_file_id = 'result: {
                 while let Some(simple_file) = file_library.get(i) {
                     if parse::circom_filename_to_uri(simple_file.name()) == params.uri {
                         break 'result i;
@@ -206,15 +212,18 @@ impl Backend {
                 }
                 panic!("archive should contain uri of document");
             };
-            result
+            archive.inner.file_id_main = main_file_id;
+            Some(OptionalDocumentData {
+                archive,
+                main_file_id,
+            })
         } else {
-            0 // TODO: Make main_file_id optional and tied to other optional document data
+            None
         };
 
         let document = DocumentData {
             content: Rope::from_str(&params.text),
-            archive,
-            main_file_id, // due to the way codespan_reporting works
+            optional,
         };
 
         document_map.borrow_mut().insert(params.uri, document);
@@ -443,11 +452,11 @@ impl LanguageServer for Backend {
             return Ok(None);
         };
 
-        let Some(archive) = &document_data.archive else {
+        let Some(OptionalDocumentData { archive, main_file_id }) = &document_data.optional else {
             return Ok(Some(parse::simple_hover(String::from("Could not find information (are there any compilation errors?)"))))
         };
 
-        Ok(ast::find_token(pos, &word, document_data.main_file_id, archive).map(|x| x.to_hover()))
+        Ok(ast::find_token(pos, &word, *main_file_id, archive).map(|x| x.to_hover()))
     }
 
     async fn goto_definition(
@@ -469,14 +478,11 @@ impl LanguageServer for Backend {
             return Ok(None);
         };
 
-        let Some(archive) = &document_data.archive else {
+        let Some(OptionalDocumentData { archive, main_file_id }) = &document_data.optional else {
             return Ok(None)
         };
 
-        Ok(
-            ast::find_token(pos, &word, document_data.main_file_id, archive)
-                .map(|x| x.to_goto_definition()),
-        )
+        Ok(ast::find_token(pos, &word, *main_file_id, archive).map(|x| x.to_goto_definition()))
     }
 }
 
