@@ -199,7 +199,7 @@ impl Backend {
 
             let result = 'result: {
                 while let Some(simple_file) = file_library.get(i) {
-                    if parse::string_to_uri(simple_file.name()) == params.uri {
+                    if parse::circom_filename_to_uri(simple_file.name()) == params.uri {
                         break 'result i;
                     }
                     i += 1;
@@ -251,7 +251,7 @@ impl Backend {
                     .get(label.file_id)
                     .expect("invalid file_id from label");
 
-                let uri = parse::string_to_uri(simple_file.name());
+                let uri = parse::circom_filename_to_uri(simple_file.name());
                 let rope = Rope::from_str(simple_file.source());
 
                 (

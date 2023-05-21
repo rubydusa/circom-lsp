@@ -209,7 +209,7 @@ pub fn char_range_to_position_range(
     })
 }
 
-pub fn string_to_uri(s: &str) -> Url {
+pub fn circom_filename_to_uri(s: &str) -> Url {
     // strip first and last chars because circom is stupid
     let fixed = {
         let mut chars = s.chars();
