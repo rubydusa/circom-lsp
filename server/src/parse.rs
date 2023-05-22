@@ -222,13 +222,6 @@ pub fn circom_filename_to_uri(s: &str) -> Url {
     Url::from_file_path(fixed).expect("string is valid uri")
 }
 
-pub fn simple_hover(message: String) -> Hover {
-    Hover {
-        contents: HoverContents::Scalar(MarkedString::String(message)),
-        range: None,
-    }
-}
-
 // Copied and modified from circom
 // Failure if unclosed comment
 pub fn preprocess(expr: &str) -> Result<String, ()> {

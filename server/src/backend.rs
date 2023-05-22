@@ -15,6 +15,7 @@ use std::io::Write as OtherWrite;
 use std::sync::Mutex;
 
 use crate::ast;
+use crate::lsp_types_util;
 use crate::parse;
 use crate::wrappers::*;
 
@@ -458,7 +459,7 @@ impl LanguageServer for Backend {
         };
 
         let Some(OptionalDocumentData { archive, main_file_id }) = &document_data.optional else {
-            return Ok(Some(parse::simple_hover(String::from("Could not find information (are there any compilation errors?)"))))
+            return Ok(Some(lsp_types_util::simple_hover(String::from("Could not find information (are there any compilation errors?)"))))
         };
 
         Ok(ast::find_token(pos, &word, *main_file_id, archive).map(|x| x.to_hover()))

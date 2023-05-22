@@ -1,5 +1,6 @@
 mod ast;
 mod backend;
+mod lsp_types_util;
 mod parse;
 mod wrappers;
 
