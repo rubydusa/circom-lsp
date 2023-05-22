@@ -271,9 +271,9 @@ impl Backend {
                 (
                     uri,
                     Range {
-                        start: parse::char_to_position(&rope, label.range.start)
+                        start: parse::char_to_position(&rope, rope.byte_to_char(label.range.start))
                             .expect("valid label range start"),
-                        end: parse::char_to_position(&rope, label.range.end)
+                        end: parse::char_to_position(&rope, rope.byte_to_char(label.range.end))
                             .expect("valid label range end"),
                     },
                 )

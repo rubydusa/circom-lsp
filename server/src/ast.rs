@@ -401,6 +401,7 @@ fn get_docs(name: &str, archive: &ProgramArchive) -> Option<String> {
         .get(file_id)
         .expect("file_id of definition should be valid");
     let content = Rope::from_str(file.source());
+    let start = content.try_byte_to_char(start).ok()?;
 
     parse::read_comment(&content, start)
 }
@@ -448,6 +449,8 @@ fn get_location(
 
     let uri = parse::circom_filename_to_uri(simple_file.name());
     let source = simple_file.source();
+    let rope = Rope::from_str(source);
+    let range = rope.try_byte_to_char(range.start).ok()?..rope.try_byte_to_char(range.end).ok()?;
 
     let document = Rope::from_str(source);
     Some(lsp_types::Location {
