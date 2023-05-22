@@ -73,7 +73,7 @@ impl Backend {
         // also, as of now circom's parser function doesn't seperate the file library creation
         // logic from the parseing, so it's impossible to run the parser on an intermediate buffer
         let archive = if publish_diagnostics {
-            let (_tmp, file_name) = {
+            let (tmp, file_name) = {
                 let main_file_name = params
                     .uri
                     .to_file_path()
@@ -130,6 +130,23 @@ impl Backend {
                     )
                 }
                 Err((file_library, reports)) => {
+                    if tmp.is_some() {
+                        panic!(
+                            "generated tmp code should be valid! reports: {:#?}",
+                            reports
+                                .into_iter()
+                                .map(|report| {
+                                    let (diag, uri) = Self::report_to_diagnostic(
+                                        report,
+                                        &file_library,
+                                        &params.uri,
+                                    );
+
+                                    format!("report: {} in file: {}", diag.message, uri)
+                                })
+                                .collect::<Vec<_>>()
+                        )
+                    }
                     (reports, FileLibrarySource::FileLibrary(file_library))
                 }
             };
