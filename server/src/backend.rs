@@ -15,6 +15,7 @@ use std::io::Write as OtherWrite;
 use std::sync::Mutex;
 
 use crate::ast;
+use crate::constants;
 use crate::lsp_types_util;
 use crate::parse;
 use crate::wrappers::*;
@@ -73,7 +74,7 @@ impl Backend {
         // also, as of now circom's parser function doesn't seperate the file library creation
         // logic from the parseing, so it's impossible to run the parser on an intermediate buffer
         let archive = if publish_diagnostics {
-            let (tmp, file_name, version) = {
+            let (_tmp, file_name, version) = {
                 let main_file_name = params
                     .uri
                     .to_file_path()
@@ -109,10 +110,11 @@ impl Backend {
                     (
                         Some(tmp),
                         tmp_file_name,
-                        ast.get_version().unwrap_or_else(|| (2, 1, 5)),
+                        ast.get_version()
+                            .unwrap_or_else(|| constants::LATEST_VERSION),
                     )
                 } else {
-                    (None, main_file_name, (2, 1, 5))
+                    (None, main_file_name, constants::LATEST_VERSION)
                 }
             };
 
@@ -500,12 +502,16 @@ impl LanguageServer for Backend {
 // generate code to act as main
 fn produce_main(file_name: &str, ast: &circom_structure::ast::AST) -> String {
     // assumption: no one will call a template/function 'X1234567890'
-    let version = ast.get_version().unwrap_or_else(|| (2, 1, 5));
+    let version = ast
+        .get_version()
+        .unwrap_or_else(|| constants::LATEST_VERSION);
     let version = parse::version_string(version);
 
     let mut result = format!(
-        "pragma circom {};include \"{}\";template X1234567890() {{",
-        version, file_name
+        "pragma circom {};include \"{}\";template {}() {{",
+        version,
+        file_name,
+        constants::DUMMY_MAIN_NAME
     );
     for (i, definition) in ast.definitions.iter().enumerate() {
         let (name, args_len, var_type) = match definition {
@@ -521,7 +527,12 @@ fn produce_main(file_name: &str, ast: &circom_structure::ast::AST) -> String {
 
         write!(result, "{} a{} = {}({});", var_type, i, name, zeros).unwrap();
     }
-    write!(result, "}} component main = X1234567890();").unwrap();
+    write!(
+        result,
+        "}} component main = {}();",
+        constants::DUMMY_MAIN_NAME
+    )
+    .unwrap();
 
     result
 }
