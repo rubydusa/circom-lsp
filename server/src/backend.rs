@@ -73,7 +73,7 @@ impl Backend {
         // also, as of now circom's parser function doesn't seperate the file library creation
         // logic from the parseing, so it's impossible to run the parser on an intermediate buffer
         let archive = if publish_diagnostics {
-            let (tmp, file_name) = {
+            let (tmp, file_name, version) = {
                 let main_file_name = params
                     .uri
                     .to_file_path()
@@ -106,16 +106,21 @@ impl Backend {
                     tmp.write_all(text.as_bytes())
                         .map_err(OnChangeError::TempfileError)?;
 
-                    (Some(tmp), tmp_file_name)
+                    (
+                        Some(tmp),
+                        tmp_file_name,
+                        ast.get_version().unwrap_or_else(|| (2, 1, 5)),
+                    )
                 } else {
-                    (None, main_file_name)
+                    (None, main_file_name, (2, 1, 5))
                 }
             };
 
+            let version_string = parse::version_string(version);
             let (reports, file_library_source) = match circom_parser::run_parser(
                 file_name,
-                "2.1.5", // TODO: figure what this version number actually does
-                vec![],  // TODO: add linked library support
+                &version_string,
+                vec![], // TODO: add linked library support
             ) {
                 Ok((mut archive, mut reports)) => {
                     let mut type_reports =
@@ -512,9 +517,12 @@ impl LanguageServer for Backend {
 // generate code to act as main
 fn produce_main(file_name: &str, ast: &circom_structure::ast::AST) -> String {
     // assumption: no one will call a template/function 'X1234567890'
+    let version = ast.get_version().unwrap_or_else(|| (2, 1, 5));
+    let version = parse::version_string(version);
+
     let mut result = format!(
-        "pragma circom 2.1.5;include \"{}\";template X1234567890() {{",
-        file_name
+        "pragma circom {};include \"{}\";template X1234567890() {{",
+        version, file_name
     );
     for (i, definition) in ast.definitions.iter().enumerate() {
         let (name, args_len, var_type) = match definition {

@@ -299,3 +299,7 @@ pub fn preprocess(expr: &str) -> Result<String, ()> {
         Ok(pp)
     }
 }
+
+pub fn version_string(version: (usize, usize, usize)) -> String {
+    format!("{}.{}.{}", version.0, version.1, version.2)
+}
