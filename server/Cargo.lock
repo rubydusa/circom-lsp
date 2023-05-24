@@ -630,7 +630,7 @@ dependencies = [
 [[package]]
 name = "parser"
 version = "2.1.5"
-source = "git+https://github.com/iden3/circom#de47e1254640de0705e0586c922f587a57fc84bc"
+source = "git+https://github.com/iden3/circom?rev=ce903c6#ce903c60fd1754b2c84525b06d2617bc657df211"
 dependencies = [
  "lalrpop",
  "lalrpop-util",
@@ -748,7 +748,7 @@ dependencies = [
 [[package]]
 name = "program_structure"
 version = "2.1.5"
-source = "git+https://github.com/iden3/circom#de47e1254640de0705e0586c922f587a57fc84bc"
+source = "git+https://github.com/iden3/circom?rev=ce903c6#ce903c60fd1754b2c84525b06d2617bc657df211"
 dependencies = [
  "codespan",
  "codespan-reporting",
@@ -1230,7 +1230,7 @@ dependencies = [
 [[package]]
 name = "type_analysis"
 version = "2.1.5"
-source = "git+https://github.com/iden3/circom#de47e1254640de0705e0586c922f587a57fc84bc"
+source = "git+https://github.com/iden3/circom?rev=ce903c6#ce903c60fd1754b2c84525b06d2617bc657df211"
 dependencies = [
  "num-bigint-dig",
  "num-traits",
