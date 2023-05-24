@@ -499,9 +499,11 @@ impl LanguageServer for Backend {
     }
 }
 
-// generate code to act as main
+/// Generates Circom code with a main component that uses every definition from the ast.
+///
+/// Used because Circom compilation of a file without a main component fails, and also because
+/// ProgramArchives includes information only about the definitions used in the main component.
 fn produce_main(file_name: &str, ast: &circom_structure::ast::AST) -> String {
-    // assumption: no one will call a template/function 'X1234567890'
     let version = ast
         .get_version()
         .unwrap_or_else(|| constants::LATEST_VERSION);

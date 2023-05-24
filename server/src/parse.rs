@@ -10,13 +10,13 @@ enum CommentParserState {
     MaybeOutside,
 }
 
+/// `start` is the char index where the keyword starts.
+/// Example: if comment is produced for a function 'Main', the index would be the index of the
+/// character 'M'
 pub fn read_comment(content: &Rope, start: usize) -> Option<String> {
     read_multi_singleline_comment(content, start).or(read_multiline_comment(content, start))
 }
 
-// start is the char index where the keyword starts.
-// example: if comment is produced for a function 'Main', the index would be the index of the
-// character 'M'
 pub fn read_multiline_comment(content: &Rope, start: usize) -> Option<String> {
     let mut current_idx = start;
     let mut current_state = CommentParserState::Outside;
@@ -145,6 +145,7 @@ pub fn read_multi_singleline_comment(content: &Rope, start: usize) -> Option<Str
     }
 }
 
+/// Returns the word and the index of the first character at `position`, if exists.
 pub fn find_word(rope: &Rope, position: Position) -> ropey::Result<Option<(usize, String)>> {
     let char_idx = position_to_char(rope, position)?;
     let char = rope
@@ -209,6 +210,7 @@ pub fn char_range_to_position_range(
     })
 }
 
+/// Circom stores filenames surronded by double quotes
 pub fn circom_filename_to_uri(s: &str) -> Url {
     // strip first and last chars because circom is stupid
     let fixed = {
@@ -222,8 +224,8 @@ pub fn circom_filename_to_uri(s: &str) -> Url {
     Url::from_file_path(fixed).expect("string is valid uri")
 }
 
-// Copied and modified from circom
-// Failure if unclosed comment
+/// Copied and modified from Circom.
+/// Failure means there is an unclosed comment.
 pub fn preprocess(expr: &str) -> Result<String, ()> {
     let mut pp = String::new();
     let mut state = 0;

@@ -150,6 +150,8 @@ enum DefinitionData<'a> {
     Function(&'a FunctionData),
 }
 
+/// `start` is the character offset at which the token starts.
+/// `word` is the name of the token.
 pub fn find_token(
     start: usize,
     word: &str,
