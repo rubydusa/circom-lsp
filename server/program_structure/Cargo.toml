@@ -2,6 +2,8 @@
 name = "circom-lsp-program-structure"
 version = "2.1.5"
 authors = ["Costa Group UCM","iden3"]
+license = "GPL-3.0"
+description = "Support crate for circom-lsp"
 edition = "2018"
 
 [dependencies]
