@@ -13,9 +13,9 @@ tower-lsp = "0.19.0"
 
 # lalrpop-util in this specific version required for circom parser to work
 lalrpop-util = { version = "0.19.9", features = ["lexer"] }
-circom_parser = { path = "../parser/", package = "parser"}
-circom_type_checker = { path = "../type_analysis/", package = "type_analysis"}
-circom_structure = { path = "../program_structure/", package = "program_structure"}
+circom_parser = { path = "../parser/", package = "circom-lsp-parser", version = "2.1.5"}
+circom_type_checker = { path = "../type_analysis/", package = "circom-lsp-type-analysis", version = "2.1.5" }
+circom_structure = { path = "../program_structure/", package = "circom-lsp-program-structure", version = "2.1.5" }
 ropey = "1.6.0"
 tokio = { version = "1.26.0", features = ["rt-multi-thread", "macros", "io-std"] }
 codespan-reporting = "0.9.0"

@@ -107,17 +107,55 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 name = "circom-lsp"
 version = "0.1.0"
 dependencies = [
+ "circom-lsp-parser",
+ "circom-lsp-program-structure",
+ "circom-lsp-type-analysis",
  "codespan-reporting",
  "itertools",
  "lalrpop-util",
  "num-traits",
- "parser",
- "program_structure",
  "ropey",
  "tempfile",
  "tokio",
  "tower-lsp",
- "type_analysis",
+]
+
+[[package]]
+name = "circom-lsp-parser"
+version = "2.1.5"
+dependencies = [
+ "circom-lsp-program-structure",
+ "lalrpop",
+ "lalrpop-util",
+ "num-bigint-dig",
+ "num-traits",
+ "regex",
+ "rustc-hex",
+ "serde",
+ "serde_derive",
+]
+
+[[package]]
+name = "circom-lsp-program-structure"
+version = "2.1.5"
+dependencies = [
+ "codespan",
+ "codespan-reporting",
+ "num-bigint-dig",
+ "num-traits",
+ "regex",
+ "rustc-hex",
+ "serde",
+ "serde_derive",
+]
+
+[[package]]
+name = "circom-lsp-type-analysis"
+version = "2.1.5"
+dependencies = [
+ "circom-lsp-program-structure",
+ "num-bigint-dig",
+ "num-traits",
 ]
 
 [[package]]
@@ -628,21 +666,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "parser"
-version = "2.1.5"
-dependencies = [
- "lalrpop",
- "lalrpop-util",
- "num-bigint-dig",
- "num-traits",
- "program_structure",
- "regex",
- "rustc-hex",
- "serde",
- "serde_derive",
-]
-
-[[package]]
 name = "percent-encoding"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -742,20 +765,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa1fb82fc0c281dd9671101b66b771ebbe1eaf967b96ac8740dcba4b70005ca8"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "program_structure"
-version = "2.1.5"
-dependencies = [
- "codespan",
- "codespan-reporting",
- "num-bigint-dig",
- "num-traits",
- "regex",
- "rustc-hex",
- "serde",
- "serde_derive",
 ]
 
 [[package]]
@@ -1223,15 +1232,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0955b8137a1df6f1a2e9a37d8a6656291ff0297c1a97c24e0d8425fe2312f79a"
 dependencies = [
  "once_cell",
-]
-
-[[package]]
-name = "type_analysis"
-version = "2.1.5"
-dependencies = [
- "num-bigint-dig",
- "num-traits",
- "program_structure",
 ]
 
 [[package]]
