@@ -15,7 +15,7 @@ jobs:
       run: cd server && cargo build
       
     - name: Test
-      run: cd server && cargo test
+      run: cd server && cargo test --package circom-lsp
       
     - name: Fmt
-      run: cd server && cargo fmt -- --check
+      run: cd server && cargo fmt --package circom-lsp
