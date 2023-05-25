@@ -3,7 +3,8 @@
   "displayName": "circom-lsp",
   "publisher": "rubydusa",
   "description": "LSP server for Circom",
-  "version": "0.0.1",
+  "icon": "assets/logo.png",
+  "version": "0.0.2",
   "engines": {
     "vscode": "^1.78.0"
   },
