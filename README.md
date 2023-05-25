@@ -8,7 +8,7 @@ Installation through Cargo:
 cargo install circom-lsp
 ```
 
-Currently, there is no VSCode extension. If you create one, please submit a PR and include the code under the client directory.
+There is also an accommodating VSCode extension under the name: `circom-lsp`
 
 Code for neovim + [https://github.com/VonHeikemen/lsp-zero.nvim](lsp-zero) setup:
 
