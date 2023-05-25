@@ -667,6 +667,36 @@ pub fn get_meta(statement_or_expression: StatementOrExpression) -> &ast::Meta {
     }
 }
 
+pub fn get_definition_body(definition: &ast::Definition) -> &ast::Statement {
+    match definition {
+        ast::Definition::Template { body, .. } => body,
+        ast::Definition::Function { body, .. } => body,
+    }
+}
+
+// includes root
+pub struct ASTIteratorBFS<'a> {
+    stack: Vec<StatementOrExpression<'a>>,
+}
+
+impl<'a> ASTIteratorBFS<'a> {
+    pub fn new(root: StatementOrExpression<'a>) -> ASTIteratorBFS<'a> {
+        ASTIteratorBFS { stack: vec![root] }
+    }
+}
+
+impl<'a> Iterator for ASTIteratorBFS<'a> {
+    type Item = StatementOrExpression<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let result = self.stack.pop()?;
+        self.stack
+            .append(&mut get_next_statements_or_expression(result));
+
+        Some(result)
+    }
+}
+
 impl fmt::Display for TokenInfo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(docs) = &self.docs {

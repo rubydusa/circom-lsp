@@ -516,18 +516,46 @@ fn produce_main(file_name: &str, ast: &circom_structure::ast::AST) -> String {
         constants::DUMMY_MAIN_NAME
     );
     for (i, definition) in ast.definitions.iter().enumerate() {
-        let (name, args_len, var_type) = match definition {
+        let (name, args, var_type) = match definition {
             circom_structure::ast::Definition::Template { name, args, .. } => {
-                (name, args.len(), "component")
+                (name, args, "component")
             }
-            circom_structure::ast::Definition::Function { name, args, .. } => {
-                (name, args.len(), "var")
-            }
+            circom_structure::ast::Definition::Function { name, args, .. } => (name, args, "var"),
         };
-        let mut zeros = vec!["0,"; args_len].into_iter().collect::<String>();
-        zeros.pop();
 
-        write!(result, "{} a{} = {}({});", var_type, i, name, zeros).unwrap();
+        // needs to know how if a variable is an array, and if so what depth
+        // not using hashmap because order is important
+        let mut args_max_access = args.iter().map(|name| (name, 0)).collect::<Vec<_>>();
+        for ast_node in ast::ASTIteratorBFS::new(ast::StatementOrExpression::Statement(
+            ast::get_definition_body(definition),
+        )) {
+            if let ast::StatementOrExpression::Expression(
+                circom_structure::ast::Expression::Variable { name, access, .. },
+            ) = ast_node
+            {
+                for (arg_name, curr_max) in args_max_access.iter_mut() {
+                    if **arg_name == *name {
+                        // accesses can be both index access and component access, assuming
+                        // component access is impossible for variables
+                        let access_depth = access.len();
+                        if access_depth > *curr_max {
+                            *curr_max = access_depth;
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut dummy_args = args_max_access
+            .into_iter()
+            .map(|(_, max_access)| {
+                format!("{}0{},", "[".repeat(max_access), "]".repeat(max_access))
+            })
+            .collect::<String>();
+        // rmeove last ",";
+        dummy_args.pop();
+
+        write!(result, "{} a{} = {}({});", var_type, i, name, dummy_args).unwrap();
     }
     write!(
         result,
