@@ -1,14 +1,19 @@
 {
   "name": "circom-lsp",
   "displayName": "circom-lsp",
+  "publisher": "rubydusa",
   "description": "LSP server for Circom",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.78.0"
   },
   "categories": [
-    "Other"
+    "Programming Languages"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rubydusa/circom-lsp"
+  },
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
