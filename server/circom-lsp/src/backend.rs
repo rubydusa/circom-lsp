@@ -558,7 +558,7 @@ fn produce_main(
             circom_structure::ast::Definition::Function { name, args, .. } => (name, args, "var"),
         };
 
-        let dimensions = *output_dimensions.get(&i).unwrap_or_else(|| &0);
+        let dimensions = *output_dimensions.get(&i).unwrap_or(&0);
         let dimensions = "[1]".repeat(dimensions);
 
         // needs to know how if a variable is an array, and if so what depth
@@ -612,9 +612,9 @@ fn produce_main(
 
 #[derive(Debug)]
 enum OutputDimensionsError {
-    RopeyError(ropey::Error),
-    ParseError(ParseIntError),
-    InvalidReportError(InvalidReportError),
+    Ropey(ropey::Error),
+    Parse(ParseIntError),
+    InvalidReport(InvalidReportError),
 }
 
 #[derive(Debug)]
@@ -637,14 +637,14 @@ fn get_definitions_output_dimensions(
     if let Ok((mut archive, _)) =
         circom_parser::run_parser(tmp_file_name.to_owned(), version_string, vec![])
     {
-        let rope = Rope::from_str(&tmp_file_text);
+        let rope = Rope::from_str(tmp_file_text);
         let reports = match circom_type_checker::check_types::check_types(&mut archive) {
             Ok(type_reports) => type_reports,
             Err(type_reports) => type_reports,
         };
         let file_library = archive.file_library;
         for report in reports {
-            let report_code = report.get_code().clone();
+            let report_code = *report.get_code();
             let (diag, uri) = Backend::report_to_diagnostic(report, &file_library, main_uri);
             let report_file_name = uri
                 .to_file_path()
@@ -663,49 +663,45 @@ fn get_definitions_output_dimensions(
                     // first character points at the keyword "var" in the case of
                     // the way tmp main files are generated
                     let (start, word) = parse::find_word(&rope, diag.range.start)
-                        .map_err(OutputDimensionsError::RopeyError)?
-                        .ok_or_else(|| {
-                            OutputDimensionsError::InvalidReportError(
-                                InvalidReportError::NoWordFound,
-                            )
-                        })?;
+                        .map_err(OutputDimensionsError::Ropey)?
+                        .ok_or(OutputDimensionsError::InvalidReport(
+                            InvalidReportError::NoWordFound,
+                        ))?;
                     if word != "var" {
-                        Err(OutputDimensionsError::InvalidReportError(
+                        Err(OutputDimensionsError::InvalidReport(
                             InvalidReportError::UnexpectedFirstWord,
                         ))?
                     }
 
                     let start_of_next_word = 'result: {
-                        let mut chars = rope.chars_at(start).enumerate();
+                        let chars = rope.chars_at(start).enumerate();
                         let mut found_whitespace = false;
-                        while let Some((i, c)) = chars.next() {
+                        for (i, c) in chars {
                             match (found_whitespace, c.is_whitespace()) {
                                 (false, true) => found_whitespace = true,
                                 (true, false) => break 'result start + i,
                                 _ => (),
                             }
                         }
-                        Err(OutputDimensionsError::InvalidReportError(
+                        Err(OutputDimensionsError::InvalidReport(
                             InvalidReportError::NotFoundNextWord,
                         ))?
                     };
 
                     let next_word_position = parse::char_to_position(&rope, start_of_next_word)
-                        .map_err(OutputDimensionsError::RopeyError)?;
+                        .map_err(OutputDimensionsError::Ropey)?;
                     let (_, next_word) = parse::find_word(&rope, next_word_position)
-                        .map_err(OutputDimensionsError::RopeyError)?
-                        .ok_or_else(|| {
-                            OutputDimensionsError::InvalidReportError(
-                                InvalidReportError::NotFoundNextWord,
-                            )
-                        })?;
+                        .map_err(OutputDimensionsError::Ropey)?
+                        .ok_or(OutputDimensionsError::InvalidReport(
+                            InvalidReportError::NotFoundNextWord,
+                        ))?;
 
                     let mut next_word_chars = next_word.chars();
                     next_word_chars.next();
                     let next_word_slice = next_word_chars.as_str();
                     let num = next_word_slice
                         .parse::<usize>()
-                        .map_err(OutputDimensionsError::ParseError)?;
+                        .map_err(OutputDimensionsError::Parse)?;
                     problematic_definitions.insert(num, expected);
                 }
             }
