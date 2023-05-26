@@ -11,7 +11,9 @@ use std::cell::RefCell;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::Write;
+use std::io::Seek;
 use std::io::Write as OtherWrite;
+use std::num::ParseIntError;
 use std::sync::Mutex;
 
 use crate::ast;
@@ -74,7 +76,7 @@ impl Backend {
         // also, as of now circom's parser function doesn't seperate the file library creation
         // logic from the parseing, so it's impossible to run the parser on an intermediate buffer
         let archive = if publish_diagnostics {
-            let (_tmp, file_name, version) = {
+            let (_tmp, file_name, version_string) = {
                 let main_file_name = params
                     .uri
                     .to_file_path()
@@ -103,22 +105,51 @@ impl Backend {
                         .to_str()
                         .expect("tmpfile name to be comprised of valid utf-8")
                         .to_owned();
-                    let text = produce_main(&main_file_name, &ast);
+                    let text = produce_main(&main_file_name, &ast, HashMap::new());
                     tmp.write_all(text.as_bytes())
                         .map_err(OnChangeError::TempfileError)?;
 
-                    (
-                        Some(tmp),
-                        tmp_file_name,
+                    let version_string = parse::version_string(
                         ast.get_version()
                             .unwrap_or_else(|| constants::LATEST_VERSION),
+                    );
+
+                    // if there are any unusual output dimensions, reproduce main
+                    let output_dimensions = get_definitions_output_dimensions(
+                        &tmp_file_name,
+                        &text,
+                        &version_string,
+                        &params.uri,
                     )
+                    .unwrap_or_else(|e| {
+                        panic!("unexpected output dimensions error, reason: {:?}", e)
+                    });
+
+                    if !output_dimensions.is_empty() {
+                        let text = produce_main(&main_file_name, &ast, output_dimensions);
+
+                        let tmp_mut_ref = tmp.as_file_mut();
+                        tmp_mut_ref
+                            .set_len(0)
+                            .map_err(OnChangeError::TempfileError)?;
+                        tmp_mut_ref
+                            .seek(std::io::SeekFrom::End(0))
+                            .map_err(OnChangeError::TempfileError)?;
+
+                        tmp.write_all(text.as_bytes())
+                            .map_err(OnChangeError::TempfileError)?;
+                    }
+
+                    (Some(tmp), tmp_file_name, version_string)
                 } else {
-                    (None, main_file_name, constants::LATEST_VERSION)
+                    (
+                        None,
+                        main_file_name,
+                        parse::version_string(constants::LATEST_VERSION),
+                    )
                 }
             };
 
-            let version_string = parse::version_string(version);
             let (reports, file_library_source) = match circom_parser::run_parser(
                 file_name,
                 &version_string,
@@ -360,7 +391,7 @@ impl Backend {
                 code: None,
                 code_description: None,
                 source: Some(String::from("circom_lsp")),
-                message: format!("errors found in the following files:{}", locations),
+                message: format!("errors found in the following files:{}", locations,),
                 related_information: None,
                 tags: None,
                 data: None,
@@ -503,7 +534,11 @@ impl LanguageServer for Backend {
 ///
 /// Used because Circom compilation of a file without a main component fails, and also because
 /// ProgramArchives includes information only about the definitions used in the main component.
-fn produce_main(file_name: &str, ast: &circom_structure::ast::AST) -> String {
+fn produce_main(
+    file_name: &str,
+    ast: &circom_structure::ast::AST,
+    output_dimensions: HashMap<usize, usize>,
+) -> String {
     let version = ast
         .get_version()
         .unwrap_or_else(|| constants::LATEST_VERSION);
@@ -522,6 +557,9 @@ fn produce_main(file_name: &str, ast: &circom_structure::ast::AST) -> String {
             }
             circom_structure::ast::Definition::Function { name, args, .. } => (name, args, "var"),
         };
+
+        let dimensions = *output_dimensions.get(&i).unwrap_or_else(|| &0);
+        let dimensions = "[1]".repeat(dimensions);
 
         // needs to know how if a variable is an array, and if so what depth
         // not using hashmap because order is important
@@ -555,7 +593,12 @@ fn produce_main(file_name: &str, ast: &circom_structure::ast::AST) -> String {
         // rmeove last ",";
         dummy_args.pop();
 
-        write!(result, "{} a{} = {}({});", var_type, i, name, dummy_args).unwrap();
+        write!(
+            result,
+            "{} a{}{} = {}({});",
+            var_type, i, dimensions, name, dummy_args
+        )
+        .unwrap();
     }
     write!(
         result,
@@ -565,4 +608,108 @@ fn produce_main(file_name: &str, ast: &circom_structure::ast::AST) -> String {
     .unwrap();
 
     result
+}
+
+#[derive(Debug)]
+enum OutputDimensionsError {
+    RopeyError(ropey::Error),
+    ParseError(ParseIntError),
+    InvalidReportError(InvalidReportError),
+}
+
+#[derive(Debug)]
+enum InvalidReportError {
+    NoWordFound,
+    UnexpectedFirstWord,
+    NotFoundNextWord,
+}
+// Inferring through the AST the return types of functions is a pain in the ass
+// It's better to simply compile twice, and use data from reports to fix the issue
+//
+// assumes a single run covers all
+fn get_definitions_output_dimensions(
+    tmp_file_name: &str,
+    tmp_file_text: &str,
+    version_string: &str,
+    main_uri: &Url,
+) -> Result<HashMap<usize, usize>, OutputDimensionsError> {
+    let mut problematic_definitions = HashMap::new();
+    if let Ok((mut archive, _)) =
+        circom_parser::run_parser(tmp_file_name.to_owned(), version_string, vec![])
+    {
+        let rope = Rope::from_str(&tmp_file_text);
+        let reports = match circom_type_checker::check_types::check_types(&mut archive) {
+            Ok(type_reports) => type_reports,
+            Err(type_reports) => type_reports,
+        };
+        let file_library = archive.file_library;
+        for report in reports {
+            let report_code = report.get_code().clone();
+            let (diag, uri) = Backend::report_to_diagnostic(report, &file_library, main_uri);
+            let report_file_name = uri
+                .to_file_path()
+                .expect("uri to be valid path")
+                .to_str()
+                .expect("path to be comprised of valid utf-8")
+                .to_owned();
+
+            if report_file_name == tmp_file_name {
+                if let circom_structure::error_code::ReportCode::WrongTypesInAssignOperationDims(
+                    _,
+                    expected,
+                ) = report_code
+                {
+                    // according to manual tests, this type error's diagnostic
+                    // first character points at the keyword "var" in the case of
+                    // the way tmp main files are generated
+                    let (start, word) = parse::find_word(&rope, diag.range.start)
+                        .map_err(OutputDimensionsError::RopeyError)?
+                        .ok_or_else(|| {
+                            OutputDimensionsError::InvalidReportError(
+                                InvalidReportError::NoWordFound,
+                            )
+                        })?;
+                    if word != "var" {
+                        Err(OutputDimensionsError::InvalidReportError(
+                            InvalidReportError::UnexpectedFirstWord,
+                        ))?
+                    }
+
+                    let start_of_next_word = 'result: {
+                        let mut chars = rope.chars_at(start).enumerate();
+                        let mut found_whitespace = false;
+                        while let Some((i, c)) = chars.next() {
+                            match (found_whitespace, c.is_whitespace()) {
+                                (false, true) => found_whitespace = true,
+                                (true, false) => break 'result start + i,
+                                _ => (),
+                            }
+                        }
+                        Err(OutputDimensionsError::InvalidReportError(
+                            InvalidReportError::NotFoundNextWord,
+                        ))?
+                    };
+
+                    let next_word_position = parse::char_to_position(&rope, start_of_next_word)
+                        .map_err(OutputDimensionsError::RopeyError)?;
+                    let (_, next_word) = parse::find_word(&rope, next_word_position)
+                        .map_err(OutputDimensionsError::RopeyError)?
+                        .ok_or_else(|| {
+                            OutputDimensionsError::InvalidReportError(
+                                InvalidReportError::NotFoundNextWord,
+                            )
+                        })?;
+
+                    let mut next_word_chars = next_word.chars();
+                    next_word_chars.next();
+                    let next_word_slice = next_word_chars.as_str();
+                    let num = next_word_slice
+                        .parse::<usize>()
+                        .map_err(OutputDimensionsError::ParseError)?;
+                    problematic_definitions.insert(num, expected);
+                }
+            }
+        }
+    }
+    Ok(problematic_definitions)
 }
