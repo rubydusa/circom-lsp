@@ -5,9 +5,29 @@ on:
     tags:
       - 'v*'
 
+defaults:
+  run:
+    working-directory: server/
+
 jobs:
-  publish:
-    name: Publish for ${{ matrix.os }}
+  create-release:
+    name: create-release
+    runs-on: ubuntu-22.04
+    outputs:
+      upload_url: ${{ steps.release.outputs.upload_url }}
+    steps:
+      - name: Create GitHub release
+        id: release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: ${{ github.ref }}
+  
+  build-release:
+    name: build-release
+    needs: ['create-release']
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -16,16 +36,16 @@ jobs:
         include:
           - name: linux
             os: ubuntu-latest
-            artifact_name: target/release/<name>
-            asset_name: <name>-linux
+            asset_path: server/target/release/circom-lsp
+            asset_name: circom-lsp-linux
           - name: windows
             os: windows-latest
-            artifact_name: target/release/<name>.exe
-            asset_name: <name>-windows
+            asset_path: server/target/release/circom-lsp.exe
+            asset_name: circom-lsp-windows
           - name: macos
             os: macos-latest
-            artifact_name: target/release/<name>
-            asset_name: <name>-macos
+            asset_path: server/target/release/circom-lsp
+            asset_name: circom-lsp-macos
 
     steps:
     - uses: actions/checkout@v3
@@ -37,9 +57,14 @@ jobs:
 
     - name: Build
       run: cargo build --release --locked
-
-    - name: Upload binaries to release
-      uses: actions/upload-artifact@v2
+    
+    - name: Upload release archive
+      uses: actions/upload-release-asset@v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        name: ${{ matrix.asset_name }}
-        path: ${{ matrix.artifact_name }}
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ${{ matrix.asset_path }}
+        asset_name: ${{ matrix.asset_name }}
+        asset_content_type: application/octet-stream
+
