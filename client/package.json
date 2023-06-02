@@ -41,6 +41,7 @@
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
+    "@types/command-exists": "^1.2.0",
     "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.1",
     "@types/node": "16.x",
@@ -54,6 +55,8 @@
     "typescript": "^5.0.4"
   },
   "dependencies": {
+    "command-exists": "^1.2.9",
+    "crates.io": "^2.2.4",
     "install": "^0.13.0",
     "npm": "^9.6.7",
     "vscode-languageclient": "^8.1.0"
