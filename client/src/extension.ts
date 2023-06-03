@@ -31,13 +31,16 @@ type ExtensionError = {
 };
 
 enum ExtensionWarningType {
-	outdatedServerVersion = "LSP server is outdated"
+	outdatedServerVersion = "LSP server is outdated",
+	internetConnectionError = "Internet connection error: Could not get latest version through Cargo"
 }
 
 type ExtensionWarning = {
 	type: ExtensionWarningType.outdatedServerVersion,
 	oldVersion: SemVer,
 	newVersion: SemVer
+} | {
+	type: ExtensionWarningType.internetConnectionError
 };
 
 type ClientResult = {
@@ -161,16 +164,23 @@ async function createClient(): Promise<Result<ClientResult, ExtensionError>> {
 	}
 	else if (currentVersion !== null) {
 		const cratesIO = new CratesIO();
-		const crateData = await cratesIO.api.crates.getCrate(COMMAND);
-		const [newMAJOR, newMINOR, newPATCH] = crateData.crate.max_version.split('.').map(x => parseInt(x));
-		const [oldMAJOR, oldMINOR, oldPATCH] = currentVersion.value;
-
-		if (isOlderSemver([oldMAJOR, oldMINOR, oldPATCH], [newMAJOR, newMINOR, newPATCH])) {
-			warnings.push({
-				type: ExtensionWarningType.outdatedServerVersion,
-				oldVersion: [oldMAJOR, oldMINOR, oldPATCH],
-				newVersion: [newMAJOR, newMINOR, newPATCH]
+		const crateData = await cratesIO.api.crates.getCrate(COMMAND)
+			.catch(_e => {
+				warnings.push({
+					type: ExtensionWarningType.internetConnectionError
+				});
 			});
+		if (crateData) {
+			const [newMAJOR, newMINOR, newPATCH] = crateData.crate.max_version.split('.').map(x => parseInt(x));
+			const [oldMAJOR, oldMINOR, oldPATCH] = currentVersion.value;
+
+			if (isOlderSemver([oldMAJOR, oldMINOR, oldPATCH], [newMAJOR, newMINOR, newPATCH])) {
+				warnings.push({
+					type: ExtensionWarningType.outdatedServerVersion,
+					oldVersion: [oldMAJOR, oldMINOR, oldPATCH],
+					newVersion: [newMAJOR, newMINOR, newPATCH]
+				});
+			}
 		}
 	}
 
