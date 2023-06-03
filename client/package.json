@@ -30,6 +30,12 @@
         ],
         "configuration": "./language-configuration.json"
       }
+    ],
+    "commands": [
+      {
+        "command": "circom-lsp.server.restart",
+        "title": "CircomLSP: Restart server"
+      }
     ]
   },
   "scripts": {

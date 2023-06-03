@@ -54,17 +54,11 @@ const COMMAND_NAME = 'Circom LSP';
 const NO_VERSION_COMMAND = [0, 1, 2];
 
 export async function activate(context: vscode.ExtensionContext) {
-	const client = await createClient();
-	if (client.type === 'error') {
-		vscode.window.showErrorMessage(errorMessage(client.error));
-	}
-	else {
-		for (const warning of client.value.warnings) {
-			vscode.window.showWarningMessage(warningMessage(warning));
-		}
-		globalClient = client.value.client;
-		globalClient.start();
-	}
+	vscode.commands.registerCommand('circom-lsp.server.restart', async () => {
+		await startClient();
+	});
+
+	await startClient();
 }
 
 export function deactivate(): Thenable<void> | undefined {
@@ -74,6 +68,25 @@ export function deactivate(): Thenable<void> | undefined {
 	return globalClient.stop();
 }
 
+// starts a new client even if one already exists
+// deactivates the previous one
+async function startClient() {
+	const client = await createClient();
+	if (client.type === 'error') {
+		vscode.window.showErrorMessage(errorMessage(client.error));
+	}
+	else {
+		if (globalClient) {
+			await globalClient.stop();
+		}
+		
+		for (const warning of client.value.warnings) {
+			vscode.window.showWarningMessage(warningMessage(warning));
+		}
+		globalClient = client.value.client;
+		globalClient.start();
+	}
+}
 
 async function createClient(): Promise<Result<ClientResult, ExtensionError>> {
 	const warnings: ExtensionWarning[] = new Array();
