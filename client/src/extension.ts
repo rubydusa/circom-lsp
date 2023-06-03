@@ -84,7 +84,9 @@ async function createClient(): Promise<Result<ClientResult, ExtensionError>> {
 		};
 	}
 
-	let currentVersion: Result<number[], ExtensionError> | null = await execPromise(`${COMMAND} --version`)
+	// prior to 0.1.3 it just starts the server, no matter what cmd args are passed onto it
+	// because of that, I start a timeout of 1 second - safe to assume it won't take 1 second to print out the version
+	let currentVersion: Result<number[], ExtensionError> | null = await withTimeout(execPromise(`${COMMAND} --version`), null, 1000)
 		.then(version => {
 			const match = version.match(/[0-9]+\.[0-9]+\.[0-9]+/);
 			if (match === null) {
@@ -226,5 +228,17 @@ function execPromise(cmd: string): Promise<string> {
 			}
 			resolve(stdout);
 		});
+	});
+}
+
+function withTimeout<T, E>(promise: Promise<T>, otherwise: E, delay: number): Promise<T> {
+	return new Promise((resolve, reject) => {
+		promise
+			.then(x => resolve(x))
+			.catch(x => reject(x));
+		
+		setTimeout(() => {
+			reject(otherwise);
+		}, delay);
 	});
 }
